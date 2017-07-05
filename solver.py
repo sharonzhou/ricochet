@@ -122,9 +122,10 @@ def solve(start_state, goal_robot_name, goal):
             q.append(next_state)
         
 def test_solve():
-    goal = (3,1)
+    goal = default_goal
+    robot_name = default_robot
     state = {"robots": starting_robots, "cost":0, "prev_state":None}
-    robot_name = "red"
+    
     winning_state = solve(state, robot_name, goal)
 
     print_path(winning_state, robot_name, goal)
