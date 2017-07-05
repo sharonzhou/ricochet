@@ -1,5 +1,5 @@
 from collections import deque
-import math, pprint
+import math, pprint, time
 
 
 pp = pprint.PrettyPrinter(indent=4)
@@ -63,7 +63,7 @@ walls = [
 # x, y, robot_color tuples
 starting_robots = {
     "red": (0, 0),
-    "green": (2,3),
+    "green": (2, 3),
     "blue": (15,15)
 }
 
@@ -150,11 +150,20 @@ def get_next_states(robot_name, state):
     moves = get_robot_moves(robot_name, state)
     next_states = []
     for coord in moves:  # new coordinates for the moved robot
+        # filter previous or current coords
+        if coord in state["blacklist"][robot_name]:
+            continue
+        # if coord == state["robots"][robot_name]:
+        #     continue
+        # if state["prev_state"] is not None and coord == state["prev_state"]["robots"][robot_name]:
+        #     continue
         s = {}
         s["robots"] = state["robots"].copy()
         s["robots"][robot_name] = coord
         s["cost"] = state["cost"] + 1
         s["prev_state"] = state
+        s["blacklist"] = state["blacklist"].copy()
+        s["blacklist"][robot_name].add(coord)  # add this to the blacklist
         next_states.append(s)
     return next_states
 
@@ -202,8 +211,16 @@ def solve(start_state, goal_robot_name, goal):
     q = deque()
     q.append(start_state)
     
+    cost = 0
+    t0 = time.time()
+    
     while True:
         state = q.popleft()
+        
+        new_cost = state["cost"]
+        if new_cost > cost:
+            cost = new_cost
+            print("step: {} time: {}".format(cost, time.time() - t0))
         next_states = []
         for robot_name in state["robots"]:
             next_states.extend(get_next_states(robot_name, state))
@@ -216,8 +233,16 @@ def solve(start_state, goal_robot_name, goal):
             q.append(next_state)
         
 def test_solve():
-    goal = (5,4)
-    state = {"robots":{"red": (0,0), "green":(6,3), "blue":(1,6)}, "cost":0, "prev_state":None}
+    goal = (14,12)
+    state = {
+        "robots": {"red": (0,0), "green":(0,3), "blue":(1,6)},
+        "cost":0, 
+        "prev_state":None, 
+        "blacklist": {
+            "red":set(),
+            "green": set(),
+            "blue": set()}
+    }
     robot_name = "red"
     solve(state, robot_name, goal)
             
