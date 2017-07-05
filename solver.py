@@ -1,180 +1,13 @@
 from collections import deque, defaultdict
-import math, pprint, time
-
-
-pp = pprint.PrettyPrinter(indent=4)
-MAX = 15
-
-# x, y tuples
-walls = [
-    (3.5, 0),  # all vertical walls
-    (13.5, 0),
-    (10.5, 1),
-    (3.5, 2),
-    (1.5, 3),
-    (14.5, 3),
-    (5.5, 4),
-    (3.5, 5),
-    (10.5, 5),
-    (11.5, 6),
-    (6.5, 7),
-    (8.5, 7),
-    (6.5, 8),
-    (8.5, 8),
-    (1.5, 9),
-    (11.5, 9),
-    (5.5, 10),
-    (3.5, 11),
-    (9.5, 11),
-    (14.5, 12),
-    (7.5, 13),
-    (4.5, 14),
-    (10.5, 14),
-    (2.5, 15),
-    (8.5, 15),
-    
-    (0, 5.5),
-    (0, 11.5),
-    (1, 9.5),
-    (2, 2.5),
-    (3, 4.5),
-    (3, 10.5),
-    (4, 2.5),
-    (5, 4.5),
-    (5, 13.5),
-    (6, 10.5),
-    (7, 6.5),
-    (7, 8.5),
-    (7, 12.5),
-    (8, 6.5),
-    (8, 8.5),
-    (9, 10.5),
-    (10, 4.5),
-    (11, 0.5),
-    (11, 14.5),
-    (12, 6.5),
-    (12, 8.5),
-    (14, 3.5),
-    (14,12.5),
-    (15,5.5),
-    (15, 13.5)
-]
-
-# x, y, robot_color tuples
-starting_robots = {
-    "red": (0, 0),
-    "green": (2, 3),
-    "blue": (15,15)
-}
-
-# color defs
-HEADER = '\033[95m'
-BLUE = '\033[94m'
-GREEN = '\033[92m'
-YEL = '\033[93m'
-RED = '\033[91m'
-ENDC = '\033[0m'
-CYAN  = "\033[1;36m"
-
-def render(name):
-
-    
-    if name == "green":
-        color = GREEN
-    elif name == "red":
-        color = RED
-    elif name == "blue":
-        color = BLUE
-    else:
-        color = YEL
-        
-    return color + name[0:2].upper() + ENDC
-
-def print_board(state, goal=None):
-    row1 = list(" ·  " * (MAX + 1))
-    row2 = list("    " * (MAX + 1))
-    board = [row1, row2] * (MAX + 1)
-    
-    board = [[" └"] + ["——"] * (MAX*2) + ["———┘"]]
-    for _ in range(MAX + 1):
-        # create row to hold robots
-        row = [" │"]
-        for _ in range(MAX + 1):
-            row.extend([" ·", "  "])
-        row[-1] = " │"
-        board.append(row)
-        
-        # create row to hold walls
-        row = [" │"]
-        for _ in range(MAX + 1):
-            row.extend(["  ", "  "])
-        row[-1] = " │"
-        board.append(row)
-    board.append([" ┌"] + ["——"] * (MAX*2)+ ["———┐"])
-
-    board[6][4] = " └"
-        
-    # add walls
-    for x, y in walls:
-        if x != int(x):
-            wall = " │"
-        else:
-            wall = "——"
-        board[int(y*2 + 1)][int(x*2 + 1)] = wall
-        
-    # add goal
-    if goal is not None:
-        x, y = goal
-        board[int(y*2 + 1)][int(x*2 + 1)] = CYAN + " ■" + ENDC
-        
-    # add robots
-    for name, (x, y) in state["robots"].items():
-        board[int(y*2 + 1)][int(x*2 + 1)] = render(name)
-        
-    board.reverse()  # because list indexing is upside down
-
-    # print(board[])
-
-    board = insert_corners(board)
-
-    for row in board:
-        print("".join(row))
-
-def insert_corners(board):
-    del(board[1])
-    for y in range(2, len(board)-2):
-        for x in range(2, len(board[1])-2):  # board[0] is shorter
-            if board[y+1][x] == " │" and board[y][x+1] == "——":
-                board[y][x] = " ┌"
-            if board[y-1][x] == " │" and board[y][x+1] == "——":
-                board[y][x] = " └"
-            if board[y+1][x] == " │" and board[y][x-1] == "——":
-                board[y][x] = "—┐"
-            if board[y-1][x] == " │" and board[y][x-1] == "——":
-                board[y][x] = "—┘"
-
-    # right side
-    for y in range(1, len(board)-1):
-        if board[y][-2] == "——":
-            board[y][-1] = "—┤"
-
-        if board[y][1] == "——":
-            board[y][0] = " ├"
-
-    for x in range(1, len(board[2])-1):
-        if board[-2][x] == " │":
-            board[-1][x] = "—┴"
-
-        if board[1][x] == " │":
-            board[0][x] = "—┬"
-
-
-    return board
-    
+import math, time
+from render import print_board
+from configs import *
 
 def extremes(current, arr):
-    # start with where walls are
-    up = MAX + 1
+    """Find the highest and lowest available spots, 
+    given current value and array of obstacles.
+    returns (up, down) available locations"""
+    up = BOARD_SIZE 
     down = -1
     for v in arr:
         if v > current and v < up:
@@ -187,35 +20,42 @@ def extremes(current, arr):
     down = math.floor(down) + 1
     return up, down
 
-def get_next_states(robot_name, state, blacklist):
-    """packages next moves into actual states"""
-    moves = get_robot_moves(robot_name, state)
+def get_next_states(robot_name, moves, state, blacklist):
+    """packages next moves into actual states.
+    robot_name: which robot we're moving.
+    moves: a tuple of move coords that are possible
+    state: current state vector.
+    blacklist: don't send a robot to a location that's been sufficiently explored"""
     next_states = []
     for coord in moves:  # new coordinates for the moved robot
         
-        # filter previous or current coords
+        # ignore moves that are stuck in the same place
         if coord == state["robots"][robot_name]:
             continue
+        # ignore moves that bring us back to the robot's previous location
         elif state["prev_state"] is not None and coord == state["prev_state"]["robots"][robot_name]:
             continue
-        elif blacklist[robot_name][coord] > LIMIT:
+        # ignore moves that bring us to a very explored location
+        elif blacklist[robot_name][coord] > blacklist["limit"]:
             continue
+        # let's try it!
         else:
             blacklist[robot_name][coord] += 1
-        s = {}
-        s["robots"] = state["robots"].copy()
-        s["robots"][robot_name] = coord
-        s["cost"] = state["cost"] + 1
-        s["prev_state"] = state
-        next_states.append(s)
+
+            # create a new state to add to the queue
+            s = {}
+            s["robots"] = state["robots"].copy()
+            s["robots"][robot_name] = coord
+            s["cost"] = state["cost"] + 1
+            s["prev_state"] = state
+            next_states.append(s)
     return next_states
 
-# get_robot_moves
-def get_robot_moves(robot_name, state):
+def get_robot_moves(robot_name, state, walls=global_walls):
     """returns all possible next moves for the given robot.
     robot_name: a string name of a robot.
     state: a state object
-    returns: tuples of coords that robot can move to"""
+    returns: tuples of coords that robot can move to. (up, down, right, left)"""
     current_x, current_y = state["robots"][robot_name]
     
     # find walls and robots with same x coord or y coord
@@ -237,71 +77,73 @@ def get_robot_moves(robot_name, state):
             (left_x, current_y))
 
 def win(state, robot_name, goal):
+    """Checks if the current state wins"""
     return state["robots"][robot_name] == goal
 
 def print_path(state, robot_name, goal=None):
-    path = [state["robots"][robot_name]]
-    while state["prev_state"] is not None:
-        print_board(state, goal)
+    """Display all the states along the path we took"""
+    count = 0
+    while state is not None:
+        print_board(state, global_walls, goal)
         state = state["prev_state"]
-        path.append(state["robots"][robot_name])
-    print_board(state, goal)
-    pp.pprint(list(reversed(path)))
+        count += 1
+    print("number of moves: {}".format(count))
     
-
-LIMIT=20000
 def solve(start_state, goal_robot_name, goal):
     """find the shortest number of moves!"""
-    q = deque()
+    q = deque()  # a queue to keep track of our rough BFS
     q.append(start_state)
-    
+
+    # for reporting
     cost = 0
     t0 = time.time()
-    blacklist = {name: defaultdict(int) for name in start_state["robots"]}  # throw out solutions that bring robot back
+
+    # we use a global blacklist to stop ourselves from visiting the same point too many times
+    blacklist = {name: defaultdict(int) for name in start_state["robots"]}
+    blacklist["limit"] = 20000
     
     while True:
         state = q.popleft()
         
-        new_cost = state["cost"]
-        if new_cost > cost:
-            cost = new_cost
-            print("step: {} time: {}".format(cost, time.time() - t0))
+        if DEBUG:
+            new_cost = state["cost"]
+            if new_cost > cost:
+                cost = new_cost
+                print("step: {} time: {}".format(cost, time.time() - t0))
+
         next_states = []
         for robot_name in state["robots"]:
-            next_states.extend(get_next_states(robot_name, state, blacklist))
+            moves = get_robot_moves(robot_name, state)
+            next_states.extend(get_next_states(robot_name, moves, state, blacklist))
         
         for next_state in next_states:
             if win(next_state, goal_robot_name, goal):
-                pp.pprint("we won huzzah!")
-                print_path(next_state, robot_name, goal)
-                return
+                return next_state
             q.append(next_state)
         
 def test_solve():
     goal = (3,1)
-    state = {"robots":{"red": (0,0), "green":(6,3), "blue":(1,6)}, "cost":0, "prev_state":None}
+    state = {"robots": starting_robots, "cost":0, "prev_state":None}
     robot_name = "red"
-    solve(state, robot_name, goal)
+    winning_state = solve(state, robot_name, goal)
+
+    print_path(winning_state, robot_name, goal)
+    print("we won huzzah!")
             
 def test_get_robot_moves():
     robot_name = "red"
-    state = {"robots":{"red": (1,1)}, "cost":0, "prev_state":None}
-    res = get_robot_moves(robot_name, state)
-    assert res == ((1, 2), (1, 0), (3, 1), (0, 1))
+    walls = [(3.5,1)]
+    state = {"robots":{"red": (1,1), "green": (1,3)}, "cost":0, "prev_state":None}
+    res = get_robot_moves(robot_name, state, walls=walls)
+    assert res == ((1, 2), (1, 0), (3, 1), (0, 1)), "got {}".format(res)
     print("robot move still works ;)")
-
-def test_get_next_states():
-    robot_name = "red"
-    state = {"robots":{"red": (1,1)}, "cost":0, "prev_state":None}
-    res = get_next_states(robot_name, state)
-    pp.pprint(res)
     
 def test_print_board():
     state = {"robots":starting_robots, "cost":0, "prev_state":None}
-    print_board(state, (5,5))
+    print_board(state, global_walls, (5,5))
 
-# test_print_board()
+
 test_solve()
-# test_get_next_states()
+# test_print_board()
 # test_get_robot_moves()
 
