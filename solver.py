@@ -1,4 +1,4 @@
-from collections import deque
+from collections import deque, defaultdict
 import math, pprint, time
 
 
@@ -194,10 +194,14 @@ def get_next_states(robot_name, state, blacklist):
     for coord in moves:  # new coordinates for the moved robot
         
         # filter previous or current coords
-        if coord in blacklist[robot_name]:
+        if coord == state["robots"][robot_name]:
+            continue
+        elif state["prev_state"] is not None and coord == state["prev_state"]["robots"][robot_name]:
+            continue
+        elif blacklist[robot_name][coord] > LIMIT:
             continue
         else:
-            blacklist[robot_name].add(coord)
+            blacklist[robot_name][coord] += 1
         s = {}
         s["robots"] = state["robots"].copy()
         s["robots"][robot_name] = coord
@@ -244,7 +248,8 @@ def print_path(state, robot_name, goal=None):
     print_board(state, goal)
     pp.pprint(list(reversed(path)))
     
-    
+
+LIMIT=20000
 def solve(start_state, goal_robot_name, goal):
     """find the shortest number of moves!"""
     q = deque()
@@ -252,11 +257,10 @@ def solve(start_state, goal_robot_name, goal):
     
     cost = 0
     t0 = time.time()
-    blacklist = {name: set() for name in start_state["robots"]}  # throw out solutions that bring robot back
+    blacklist = {name: defaultdict(int) for name in start_state["robots"]}  # throw out solutions that bring robot back
     
     while True:
         state = q.popleft()
-        print(blacklist)
         
         new_cost = state["cost"]
         if new_cost > cost:
@@ -274,7 +278,7 @@ def solve(start_state, goal_robot_name, goal):
             q.append(next_state)
         
 def test_solve():
-    goal = (14,12)
+    goal = (3,1)
     state = {"robots":{"red": (0,0), "green":(6,3), "blue":(1,6)}, "cost":0, "prev_state":None}
     robot_name = "red"
     solve(state, robot_name, goal)
