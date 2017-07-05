@@ -67,67 +67,109 @@ starting_robots = {
     "blue": (15,15)
 }
 
+# color defs
+HEADER = '\033[95m'
+BLUE = '\033[94m'
+GREEN = '\033[92m'
+YEL = '\033[93m'
+RED = '\033[91m'
+ENDC = '\033[0m'
+CYAN  = "\033[1;36m"
+
 def render(name):
-    # color defs
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    GREEN = '\033[92m'
-    YEL = '\033[93m'
-    RED = '\033[91m'
-    ENDC = '\033[0m'
+
     
     if name == "green":
         color = GREEN
     elif name == "red":
         color = RED
-    else:
+    elif name == "blue":
         color = BLUE
+    else:
+        color = YEL
         
     return color + name[0:2].upper() + ENDC
 
 def print_board(state, goal=None):
-    row1 = list("..  " * (MAX + 1))
+    row1 = list(" ·  " * (MAX + 1))
     row2 = list("    " * (MAX + 1))
     board = [row1, row2] * (MAX + 1)
     
-    board = [["----"] * (MAX + 1)]
+    board = [[" └"] + ["——"] * (MAX*2) + ["———┘"]]
     for _ in range(MAX + 1):
         # create row to hold robots
-        row = ["||"]
+        row = [" │"]
         for _ in range(MAX + 1):
-            row.extend(["..", "  "])
-        row[-1] = "||"
+            row.extend([" ·", "  "])
+        row[-1] = " │"
         board.append(row)
         
         # create row to hold walls
-        row = ["||"]
+        row = [" │"]
         for _ in range(MAX + 1):
             row.extend(["  ", "  "])
-        row[-1] = "||"
+        row[-1] = " │"
         board.append(row)
-    board.append(["----"] * (MAX + 1))
+    board.append([" ┌"] + ["——"] * (MAX*2)+ ["———┐"])
+
+    board[6][4] = " └"
         
     # add walls
     for x, y in walls:
         if x != int(x):
-            wall = "||"
+            wall = " │"
         else:
-            wall = "--"
+            wall = "——"
         board[int(y*2 + 1)][int(x*2 + 1)] = wall
         
     # add goal
     if goal is not None:
         x, y = goal
-        board[int(y*2 + 1)][int(x*2 + 1)] = "**"
+        board[int(y*2 + 1)][int(x*2 + 1)] = CYAN + " ■" + ENDC
         
     # add robots
     for name, (x, y) in state["robots"].items():
         board[int(y*2 + 1)][int(x*2 + 1)] = render(name)
         
-    
     board.reverse()  # because list indexing is upside down
+
+    # print(board[])
+
+    board = insert_corners(board)
+
     for row in board:
         print("".join(row))
+
+def insert_corners(board):
+    del(board[1])
+    for y in range(2, len(board)-2):
+        for x in range(2, len(board[1])-2):  # board[0] is shorter
+            if board[y+1][x] == " │" and board[y][x+1] == "——":
+                board[y][x] = " ┌"
+            if board[y-1][x] == " │" and board[y][x+1] == "——":
+                board[y][x] = " └"
+            if board[y+1][x] == " │" and board[y][x-1] == "——":
+                board[y][x] = "—┐"
+            if board[y-1][x] == " │" and board[y][x-1] == "——":
+                board[y][x] = "—┘"
+
+    # right side
+    for y in range(1, len(board)-1):
+        if board[y][-2] == "——":
+            board[y][-1] = "—┤"
+
+        if board[y][1] == "——":
+            board[y][0] = " ├"
+
+    for x in range(1, len(board[2])-1):
+        if board[-2][x] == " │":
+            board[-1][x] = "—┴"
+
+        if board[1][x] == " │":
+            board[0][x] = "—┬"
+
+
+    return board
     
 
 def extremes(current, arr):
@@ -145,25 +187,22 @@ def extremes(current, arr):
     down = math.floor(down) + 1
     return up, down
 
-def get_next_states(robot_name, state):
+def get_next_states(robot_name, state, blacklist):
     """packages next moves into actual states"""
     moves = get_robot_moves(robot_name, state)
     next_states = []
     for coord in moves:  # new coordinates for the moved robot
+        
         # filter previous or current coords
-        if coord in state["blacklist"][robot_name]:
+        if coord in blacklist[robot_name]:
             continue
-        # if coord == state["robots"][robot_name]:
-        #     continue
-        # if state["prev_state"] is not None and coord == state["prev_state"]["robots"][robot_name]:
-        #     continue
+        else:
+            blacklist[robot_name].add(coord)
         s = {}
         s["robots"] = state["robots"].copy()
         s["robots"][robot_name] = coord
         s["cost"] = state["cost"] + 1
         s["prev_state"] = state
-        s["blacklist"] = state["blacklist"].copy()
-        s["blacklist"][robot_name].add(coord)  # add this to the blacklist
         next_states.append(s)
     return next_states
 
@@ -213,9 +252,11 @@ def solve(start_state, goal_robot_name, goal):
     
     cost = 0
     t0 = time.time()
+    blacklist = {name: set() for name in start_state["robots"]}  # throw out solutions that bring robot back
     
     while True:
         state = q.popleft()
+        print(blacklist)
         
         new_cost = state["cost"]
         if new_cost > cost:
@@ -223,7 +264,7 @@ def solve(start_state, goal_robot_name, goal):
             print("step: {} time: {}".format(cost, time.time() - t0))
         next_states = []
         for robot_name in state["robots"]:
-            next_states.extend(get_next_states(robot_name, state))
+            next_states.extend(get_next_states(robot_name, state, blacklist))
         
         for next_state in next_states:
             if win(next_state, goal_robot_name, goal):
@@ -234,15 +275,7 @@ def solve(start_state, goal_robot_name, goal):
         
 def test_solve():
     goal = (14,12)
-    state = {
-        "robots": {"red": (0,0), "green":(0,3), "blue":(1,6)},
-        "cost":0, 
-        "prev_state":None, 
-        "blacklist": {
-            "red":set(),
-            "green": set(),
-            "blue": set()}
-    }
+    state = {"robots":{"red": (0,0), "green":(6,3), "blue":(1,6)}, "cost":0, "prev_state":None}
     robot_name = "red"
     solve(state, robot_name, goal)
             
