@@ -1,5 +1,4 @@
-from queue import Queue
-from copy import deepcopy
+from collections import deque
 import math, pprint
 
 
@@ -151,9 +150,10 @@ def get_next_states(robot_name, state):
     moves = get_robot_moves(robot_name, state)
     next_states = []
     for coord in moves:  # new coordinates for the moved robot
-        s = deepcopy(state)
+        s = {}
+        s["robots"] = state["robots"].copy()
         s["robots"][robot_name] = coord
-        s["cost"] += 1
+        s["cost"] = state["cost"] + 1
         s["prev_state"] = state
         next_states.append(s)
     return next_states
@@ -199,11 +199,11 @@ def print_path(state, robot_name, goal=None):
     
 def solve(start_state, goal_robot_name, goal):
     """find the shortest number of moves!"""
-    q = Queue()  # list of states
-    q.put(start_state)
+    q = deque()
+    q.append(start_state)
     
     while True:
-        state = q.get()
+        state = q.popleft()
         next_states = []
         for robot_name in state["robots"]:
             next_states.extend(get_next_states(robot_name, state))
@@ -213,10 +213,10 @@ def solve(start_state, goal_robot_name, goal):
                 pp.pprint("we won huzzah!")
                 print_path(next_state, robot_name, goal)
                 return
-            q.put(next_state)
+            q.append(next_state)
         
 def test_solve():
-    goal = (14, 12)
+    goal = (5,4)
     state = {"robots":{"red": (0,0), "green":(6,3), "blue":(1,6)}, "cost":0, "prev_state":None}
     robot_name = "red"
     solve(state, robot_name, goal)
