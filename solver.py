@@ -3,6 +3,9 @@ import math, time
 from render import print_board
 from configs import *
 
+# State Vector
+# dict(robots=dict(color=(x,y), cost=0, prev_state=None))
+
 def extremes(current, arr):
     """Find the highest and lowest available spots, 
     given current value and array of obstacles.
@@ -19,6 +22,10 @@ def extremes(current, arr):
     up = math.ceil(up) - 1  # actual places we can go are off by one
     down = math.floor(down) + 1
     return up, down
+
+# def cache_wall_extremes():
+#     """For each location on the board, create a list of the extreme wall positions"""
+#     for x in range(BOARD_SIZE)
 
 def get_next_states(robot_name, moves, state, blacklist):
     """packages next moves into actual states.
@@ -84,13 +91,19 @@ def print_path(state, robot_name, goal=None):
     """Display all the states along the path we took"""
     count = 0
     while state is not None:
-        print_board(state, global_walls, goal)
+        print_board(state["robots"], global_walls, goal)
         state = state["prev_state"]
         count += 1
     print("number of moves: {}".format(count))
     
-def solve(start_state, goal_robot_name, goal):
-    """find the shortest number of moves!"""
+def solve_case(start_state, goal_robot_name, goal, movable_robots=None, blacklist_limit=20, cost_limit=20):
+    """find the shortest number of moves to solve, given a number of options.
+    start_state: initial conditions of board
+    goal_robot_name: which robot we're trying to move
+    goal: (x,y) of where to get it
+    movable_robots: list of robot names we can move
+    blacklist_limit: max times we'll look at once place
+    cost_limit: max steps"""
     q = deque()  # a queue to keep track of our rough BFS
     q.append(start_state)
 
@@ -100,10 +113,17 @@ def solve(start_state, goal_robot_name, goal):
 
     # we use a global blacklist to stop ourselves from visiting the same point too many times
     blacklist = {name: defaultdict(int) for name in start_state["robots"]}
-    blacklist["limit"] = 20000
+    blacklist["limit"] = blacklist_limit
+
+    # which robots are we allowed to move?
+    if movable_robots is None:
+        movable_robots = start_state["robots"].keys()
     
-    while True:
+    while len(q) > 0:
         state = q.popleft()
+
+        if state["cost"] > cost_limit:
+            return None
         
         if DEBUG:
             new_cost = state["cost"]
@@ -112,7 +132,7 @@ def solve(start_state, goal_robot_name, goal):
                 print("step: {} time: {}".format(cost, time.time() - t0))
 
         next_states = []
-        for robot_name in state["robots"]:
+        for robot_name in movable_robots:
             moves = get_robot_moves(robot_name, state)
             next_states.extend(get_next_states(robot_name, moves, state, blacklist))
         
@@ -120,16 +140,78 @@ def solve(start_state, goal_robot_name, goal):
             if win(next_state, goal_robot_name, goal):
                 return next_state
             q.append(next_state)
+
+    # ran out of search options
+    return None
+
+def full_solve(start_state, goal_robot_name, goal):
+    """Solves the board by calling solve_case many times with different paramters.
+    1. only move the goal robot
+    2. solve with all robots, low blacklist depth
+    3. solve with all robots, high blacklist depth"""
+
+    print("Trying to only move main robot")
+    result = solve_case(start_state, goal_robot_name, goal, 
+        movable_robots=[goal_robot_name],
+        blacklist_limit=float('inf'),
+        cost_limit=15)
+    if result:
+        return result
+
+    print("moving all robots, with low blacklist limit")
+    result = solve_case(start_state, goal_robot_name, goal, 
+        movable_robots=None,
+        blacklist_limit=20,
+        cost_limit=15)
+    if result:
+        return result
+
+    print("move 1 other robot at a time, low blacklist")
+    other_robots = [rob for rob in start_state["robots"] if rob != goal_robot_name]
+    for robot in other_robots:
+        print("Trying {}".format(robot))
+        result = solve_case(start_state, goal_robot_name, goal, 
+            movable_robots=[goal_robot_name, robot],
+            blacklist_limit=200,
+            cost_limit=15)
+        if result:
+            return result
+
+
+    print("move 1 other robot at a time")
+    other_robots = [rob for rob in start_state["robots"] if rob != goal_robot_name]
+    for robot in other_robots:
+        print("Trying {}".format(robot))
+        result = solve_case(start_state, goal_robot_name, goal, 
+            movable_robots=[goal_robot_name, robot],
+            blacklist_limit=2000,
+            cost_limit=10)
+        if result:
+            return result
+
+    print("moving all robots, with high blacklist limit")
+    result = solve_case(start_state, goal_robot_name, goal, 
+        movable_robots=None,
+        blacklist_limit=2000,
+        cost_limit=15)
+    if result:
+        return result
+
+
+    return None
         
-def test_solve():
+def test_solve_case():
     goal = default_goal
     robot_name = default_robot
     state = {"robots": starting_robots, "cost":0, "prev_state":None}
     
-    winning_state = solve(state, robot_name, goal)
-
-    print_path(winning_state, robot_name, goal)
-    print("we won huzzah!")
+    winning_state = solve_case(state, robot_name, goal, blacklist_limit=2000)
+    if winning_state is not None:
+        print_path(winning_state, robot_name, goal)
+        print("we won huzzah!")
+    else:
+        print_path(state, robot_name, goal)
+        print("did not win")
             
 def test_get_robot_moves():
     robot_name = "red"
@@ -140,11 +222,23 @@ def test_get_robot_moves():
     print("robot move still works ;)")
     
 def test_print_board():
-    state = {"robots":starting_robots, "cost":0, "prev_state":None}
-    print_board(state, global_walls, (5,5))
+    print_board(starting_robots, global_walls, (5,5))
 
+def test_full_solve():
+    goal = default_goal
+    robot_name = default_robot
+    state = {"robots": starting_robots, "cost":0, "prev_state":None}
+    
+    winning_state = full_solve(state, robot_name, goal)
+    if winning_state is not None:
+        print_path(winning_state, robot_name, goal)
+        print("we won huzzah!")
+    else:
+        print_path(state, robot_name, goal)
+        print("did not win")
 
-test_solve()
+# test_full_solve()
+test_solve_case()
 # test_print_board()
 # test_get_robot_moves()
 

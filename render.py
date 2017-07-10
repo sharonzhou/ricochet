@@ -81,12 +81,13 @@ def draw_corners(board):
     return board
 
 
-def print_board(state, walls, goal=None):
+def print_board(robots, walls, goal=None):
     """Draw the board with ascii art in a pretty way.
     There is a 'location' every 0.5 spacing.
     Each 'location' is rendered with two chars.
-    # Until the very end, this is an array of arrays, not strings
-    # also note that this is rendered upside down, then flipped at the end"""
+    robots: dictionary of name: (x,y)
+    walls: list of (x,y) tuples
+    goal: optional (x,y)"""
     board = get_empty_board(BOARD_SIZE)
         
     # add walls
@@ -103,7 +104,7 @@ def print_board(state, walls, goal=None):
         board[int(y * 2)][int(x * 2)] = render_item("goal")
         
     # add robots
-    for name, (x, y) in state["robots"].items():
+    for name, (x, y) in robots.items():
         board[int(y * 2)][int(x * 2)] = render_item(name)
         
     board.reverse()  # because list indexing is upside down

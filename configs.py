@@ -2,7 +2,7 @@ BOARD_SIZE = 16
 DEBUG = True
 
 # (X, Y) location robot is trying to get to
-default_goal = (3,1)
+default_goal = (6,1)
 default_robot = "red"
 
 # dict from robot color to (x,y) tuple
