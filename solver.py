@@ -19,13 +19,30 @@ def extremes(current, arr):
             down = v
     
     # fix rounding of walls/robots
-    up = math.ceil(up) - 1  # actual places we can go are off by one
-    down = math.floor(down) + 1
+    up = math.ceil(up)
+    down = math.floor(down)
     return up, down
 
-# def cache_wall_extremes():
-#     """For each location on the board, create a list of the extreme wall positions"""
-#     for x in range(BOARD_SIZE)
+extreme_cache = None
+def cache_wall_extremes(walls=global_walls):
+    """For each location on the board, create a list of the extreme wall positions"""
+    global extreme_cache
+    extreme_cache = {}
+    for current_x in range(BOARD_SIZE):
+        for current_y in range(BOARD_SIZE):
+
+            xs, ys = [], []
+            for x, y in walls:
+                if x == current_x:
+                    ys.append(y)
+                if y == current_y:
+                    xs.append(x)        
+
+            # find closest walls/robots in all directions
+            up_y, down_y = extremes(current_y, ys)
+            right_x, left_x = extremes(current_x, xs)
+
+            extreme_cache[(current_x, current_y)] = (up_y, down_y, right_x, left_x)
 
 def get_next_states(robot_name, moves, state, blacklist):
     """packages next moves into actual states.
@@ -66,8 +83,14 @@ def get_robot_moves(robot_name, state, walls=global_walls):
     current_x, current_y = state["robots"][robot_name]
     
     # find walls and robots with same x coord or y coord
-    xs, ys = [], []
-    for x, y in walls + list(state["robots"].values()):
+    if extreme_cache is None:
+        cache_wall_extremes()
+
+    up_y, down_y, right_x, left_x = extreme_cache[(current_x, current_y)]
+    xs, ys = [right_x, left_x], [up_y, down_y]  # add wall extremes to list
+    to_check = list(state["robots"].values())  # then check over robots
+
+    for x, y in to_check:
         if x == current_x:
             ys.append(y)
         if y == current_y:
@@ -78,10 +101,10 @@ def get_robot_moves(robot_name, state, walls=global_walls):
     right_x, left_x = extremes(current_x, xs)
     
     # create record tuples (up, down, right, left)
-    return ((current_x, up_y),
-            (current_x, down_y),
-            (right_x, current_y),
-            (left_x, current_y))
+    return ((current_x, up_y - 1),  # need to go off by 1, for places robot can actually go
+            (current_x, down_y + 1),
+            (right_x - 1, current_y),
+            (left_x + 1, current_y))
 
 def win(state, robot_name, goal):
     """Checks if the current state wins"""
@@ -201,6 +224,8 @@ def full_solve(start_state, goal_robot_name, goal):
     return None
         
 def test_solve_case():
+
+    # cache_wall_extremes()
     goal = default_goal
     robot_name = default_robot
     state = {"robots": starting_robots, "cost":0, "prev_state":None}
@@ -217,6 +242,7 @@ def test_get_robot_moves():
     robot_name = "red"
     walls = [(3.5,1)]
     state = {"robots":{"red": (1,1), "green": (1,3)}, "cost":0, "prev_state":None}
+    cache_wall_extremes(walls)
     res = get_robot_moves(robot_name, state, walls=walls)
     assert res == ((1, 2), (1, 0), (3, 1), (0, 1)), "got {}".format(res)
     print("robot move still works ;)")
@@ -237,8 +263,9 @@ def test_full_solve():
         print_path(state, robot_name, goal)
         print("did not win")
 
-# test_full_solve()
-test_solve_case()
+
+test_full_solve()
+# test_solve_case()
 # test_print_board()
 # test_get_robot_moves()
 
